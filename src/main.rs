@@ -11,7 +11,7 @@ buf = "
 
 give me a random English word
 
-💡💡💡
+🌲🌲🌲🌲🌲🌲
 
 Here's a random English word:
 
@@ -28,7 +28,7 @@ Example: *\"The dog's lugubrious expression made everyone in the room feel a bit
 
 Would you like another one?
 
-🔥
+➖
 
 --------------------------------------------------------------------------------
 
@@ -129,8 +129,8 @@ fn get_messages(buf: &str) -> Vec<api_request::Message> {
 	let mut a = buf;
 
 	let pat_q = "\n\n❓❓❓\n\n";
-	let pat_a = "\n\n💡💡💡\n\n";
-	let pat_e = "\n\n🔥\n\n";
+	let pat_a = "\n\n🌲🌲🌲🌲🌲🌲\n\n";
+	let pat_e = "\n\n➖\n\n";
 
 	while a.len() > 0 {
 		let Some(q_start) = a.find(pat_q) else {
