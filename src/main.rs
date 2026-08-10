@@ -1,4 +1,5 @@
 use anyhow::{Result, Error};
+use clap::{Arg, Command};
 use std::io::{self, Read};
 
 /* example input
@@ -38,9 +39,37 @@ yes".to_owned();
 // -----------------------------------------------------------------------------
 #[tokio::main]
 async fn main() -> Result<()> {
+	let matches = Command::new("ai-api")
+		.version("1.0.0")
+		.author("Lisper")
+		.about("AI client")
+		.arg(
+			Arg::new("brand")
+				.long("brand")
+				.value_name("BRAND")
+				.default_value("deepseek")
+				.help("The brand name"),
+		)
+		.arg(
+			Arg::new("brand-setting")
+				.long("brand-setting")
+				.value_name("BRAND-SETTING")
+				.default_value("{}")
+				.help("The specific settings for that brand"),
+		)
+		.get_matches();
+
+	let brand = matches.get_one::<String>("brand").unwrap().to_owned();
+	let brand_setting = matches.get_one::<String>("brand-setting").unwrap().to_owned();
+
 	let msgs = list_messages()?;
 
-	deepseek::api(msgs).await?;
+	match brand.as_ref() {
+		"deepseek" => {
+			deepseek::api(msgs, &brand_setting).await?;
+		}
+		_ => {}
+	}
 
 	Ok(())
 }
@@ -115,29 +144,14 @@ pub mod deepseek {
 	const URL_BASE: &str = "https://api.deepseek.com";
 	const URL_COMPLETIONS: &str = "/chat/completions";
 
-	pub async fn api(msgs: Vec<super::Message>) -> Result<()> {
-		let model = "deepseek-v4-flash".to_owned();
-		let thinking = Some(req::Thinking {
-			typ: "disabled".to_owned(),
-		});
-		let reasoning_effort = "low".to_owned();
-		let stream = false;
-		let url_completions = format!("{}{}", URL_BASE, URL_COMPLETIONS);
-		let messages = msgs.into_iter().map(|it| {
+	pub async fn api(msgs: Vec<super::Message>, brand_setting: &str) -> Result<()> {
+		let mut req: req::Request = serde_json::from_str(brand_setting)?;
+		req.messages = msgs.into_iter().map(|it| {
 			req::Message{
 				content: it.content,
 				role: it.role,
 			}
 		}).collect();
-
-		let req = req::Request {
-			messages,
-			model,
-			thinking,
-			reasoning_effort,
-			stream,
-			..req::Request::default()
-		};
 
 		// -------------------------------------------------------------------------
 		let Some(key) = std::env::var("DEEPSEEK_API_KEY").ok() else {
@@ -152,6 +166,7 @@ pub mod deepseek {
 		let client = reqwest::Client::builder()
 			.default_headers(headers)
 			.build()?;
+		let url_completions = format!("{}{}", URL_BASE, URL_COMPLETIONS);
 		let resp = client
 			.post(url_completions)
 			.json(&req)
@@ -183,42 +198,61 @@ pub mod deepseek {
 	}
 
 	pub mod req {
-		use serde::{Serialize};
+		use serde::{Serialize, Deserialize};
 
-		#[derive(Debug, Default, Serialize)]
+		#[derive(Debug, Default, Serialize, Deserialize)]
 		pub struct Request {
+			#[serde(default)]
 			pub messages: Vec<Message>,
+			#[serde(default = "default_model")]
 			pub model: String,
+			#[serde(default)]
 			pub thinking: Option<Thinking>,
+			#[serde(default = "default_reasoning_effort")]
 			pub reasoning_effort: String,
+			#[serde(default)]
 			pub max_tokens: Option<i64>,
+			#[serde(default)]
 			pub response_format: Option<ResponseFormat>,
+			#[serde(default)]
 			pub stream: bool,
+			#[serde(default)]
 			pub stream_options: Option<StreamOptions>,
+			#[serde(default)]
 			pub temperature: Option<i32>,
+			#[serde(default)]
 			pub top_p: Option<i32>,
+			#[serde(default)]
 			pub logprobs: bool,
+			#[serde(default)]
 			pub top_logprobs: Option<i32>,
 		}
 
-		#[derive(Debug, Default, Serialize)]
+		#[derive(Debug, Default, Serialize, Deserialize)]
 		pub struct Message {
 			pub content: String,
 			pub role: String,
 		}
-		#[derive(Debug, Default, Serialize)]
+		#[derive(Debug, Default, Serialize, Deserialize)]
 		pub struct Thinking {
 			#[serde(rename = "type")]
 			pub typ: String,
 		}
-		#[derive(Debug, Default, Serialize)]
+		#[derive(Debug, Default, Serialize, Deserialize)]
 		pub struct ResponseFormat {
 			#[serde(rename = "type")]
 			pub typ: String,
 		}
-		#[derive(Debug, Default, Serialize)]
+		#[derive(Debug, Default, Serialize, Deserialize)]
 		pub struct StreamOptions {
 			pub include_usage: bool,
+		}
+
+		fn default_model() -> String {
+			"deepseek-v4-flash".to_owned()
+		}
+		fn default_reasoning_effort() -> String {
+			"high".to_owned()
 		}
 	}
 
